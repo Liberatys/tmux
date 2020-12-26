@@ -45,7 +45,7 @@ static void	screen_redraw_set_context(struct client *,
 #define CELL_JOIN 11
 #define CELL_OUTSIDE 12
 
-#define CELL_BORDERS " xqlkmjwvtun~"
+#define CELL_BORDERS "           "
 
 static const struct utf8_data screen_redraw_double_borders[] = {
 	{ "", 0, 0, 0 },
