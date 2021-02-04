@@ -191,6 +191,11 @@ directories are missing).
 Behave as a login shell.
 This flag currently has no effect and is for compatibility with other shells
 when using tmux as a login shell.
+.It Fl N
+Do not start the server even if the command would normally do so (for example
+.Ic new-session
+or
+.Ic start-server ) .
 .It Fl S Ar socket-path
 Specify a full alternative path to the server socket.
 If
@@ -1357,7 +1362,7 @@ a pane ID such as
 .Ql %0 ;
 .Ql %*
 for all panes in the attached session;
-an window ID such as
+a window ID such as
 .Ql @0 ;
 or
 .Ql @*
@@ -1652,6 +1657,8 @@ The following commands are supported in copy mode:
 .It Li "previous-paragraph" Ta "{" Ta "M-{"
 .It Li "previous-space" Ta "B" Ta ""
 .It Li "previous-word" Ta "b" Ta "M-b"
+.It Li "rectangle-on" Ta "" Ta ""
+.It Li "rectangle-off" Ta "" Ta ""
 .It Li "rectangle-toggle" Ta "v" Ta "R"
 .It Li "refresh-from-pane" Ta "r" Ta "r"
 .It Li "scroll-down" Ta "C-e" Ta "C-Down"
@@ -3568,12 +3575,16 @@ The default is 80x24.
 If enabled and the session is no longer attached to any clients, it is
 destroyed.
 .It Xo Ic detach-on-destroy
-.Op Ic on | off
+.Op Ic off | on | no-detached
 .Xc
 If on (the default), the client is detached when the session it is attached to
 is destroyed.
 If off, the client is switched to the most recently active of the remaining
 sessions.
+If
+.Ic no-detached ,
+the client is detached only if there are no detached sessions; if detached
+sessions exist, the client is switched to the most recently active.
 .It Ic display-panes-active-colour Ar colour
 Set the colour used by the
 .Ic display-panes
@@ -4181,10 +4192,13 @@ interactive application starts and restores it on exit, so that any output
 visible before the application starts reappears unchanged after it exits.
 .Pp
 .It Xo Ic remain-on-exit
-.Op Ic on | off
+.Op Ic on | off | failed
 .Xc
 A pane with this flag set is not destroyed when the program running in it
 exits.
+If set to
+.Ic failed ,
+then only when the program exit status is not zero.
 The pane may be reactivated with the
 .Ic respawn-pane
 command.
@@ -4643,8 +4657,8 @@ of the variable respectively.
 .Ql q:\&
 will escape
 .Xr sh 1
-special characters or with an
-.Ql e
+special characters or with a
+.Ql h
 suffix, escape hash characters (so
 .Ql #
 becomes
@@ -4813,7 +4827,6 @@ The following variables are available, where appropriate:
 .It Li "pane_pipe" Ta "" Ta "1 if pane is being piped"
 .It Li "pane_right" Ta "" Ta "Right of pane"
 .It Li "pane_search_string" Ta "" Ta "Last search string in copy mode"
-.It Li "pane_skipped" Ta "" Ta "Bytes skipped as not visible in pane"
 .It Li "pane_start_command" Ta "" Ta "Command pane started with"
 .It Li "pane_synchronized" Ta "" Ta "1 if pane is synchronized"
 .It Li "pane_tabs" Ta "" Ta "Pane tab positions"
@@ -4821,7 +4834,6 @@ The following variables are available, where appropriate:
 .It Li "pane_top" Ta "" Ta "Top of pane"
 .It Li "pane_tty" Ta "" Ta "Pseudo terminal of pane"
 .It Li "pane_width" Ta "" Ta "Width of pane"
-.It Li "pane_written" Ta "" Ta "Bytes written by pane (aside from redrawing)"
 .It Li "pid" Ta "" Ta "Server PID"
 .It Li "popup_key" Ta "" Ta "Key pressed in popup"
 .It Li "popup_mouse_x" Ta "" Ta "Mouse X position in popup"
@@ -4874,7 +4886,8 @@ The following variables are available, where appropriate:
 .It Li "window_cell_height" Ta "" Ta "Height of each cell in pixels"
 .It Li "window_cell_width" Ta "" Ta "Width of each cell in pixels"
 .It Li "window_end_flag" Ta "" Ta "1 if window has the highest index"
-.It Li "window_flags" Ta "#F" Ta "Window flags"
+.It Li "window_flags" Ta "#F" Ta "Window flags with # escaped as ##"
+.It Li "window_raw_flags" Ta "" Ta "Window flags with nothing escaped"
 .It Li "window_format" Ta "" Ta "1 if format is for a window"
 .It Li "window_height" Ta "" Ta "Height of window"
 .It Li "window_id" Ta "" Ta "Unique window ID"
@@ -5827,7 +5840,7 @@ Lock each client individually by running the command specified by the
 .Ic lock-command
 option.
 .It Xo Ic run-shell
-.Op Fl b
+.Op Fl bC
 .Op Fl d Ar delay
 .Op Fl t Ar target-pane
 .Op Ar shell-command
@@ -5835,9 +5848,14 @@ option.
 .D1 (alias: Ic run )
 Execute
 .Ar shell-command
-in the background without creating a window.
-Before being executed, shell-command is expanded using the rules specified in
-the
+or (with
+.Fl C )
+a
+.Nm
+command in the background without creating a window.
+Before being executed,
+.Ar shell-command
+is expanded using the rules specified in the
 .Sx FORMATS
 section.
 With
@@ -5847,11 +5865,13 @@ the command is run in the background.
 waits for
 .Ar delay
 seconds before starting the command.
-After the command finishes, any output to stdout is displayed in view mode (in
-the pane specified by
+If
+.Fl C
+is not given, any output to stdout is displayed in view mode (in the pane
+specified by
 .Fl t
-or the current pane if omitted).
-If the command doesn't return success, the exit status is also displayed.
+or the current pane if omitted) after the command finishes.
+If the command fails, the exit status is also displayed.
 .It Xo Ic wait-for
 .Op Fl L | S | U
 .Ar channel
