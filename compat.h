@@ -27,6 +27,19 @@
 #include <termios.h>
 #include <wchar.h>
 
+#ifdef HAVE_EVENT2_EVENT_H
+#include <event2/event.h>
+#include <event2/event_compat.h>
+#include <event2/event_struct.h>
+#include <event2/buffer.h>
+#include <event2/buffer_compat.h>
+#include <event2/bufferevent.h>
+#include <event2/bufferevent_struct.h>
+#include <event2/bufferevent_compat.h>
+#else
+#include <event.h>
+#endif
+
 #ifdef HAVE_MALLOC_TRIM
 #include <malloc.h>
 #endif
@@ -252,6 +265,13 @@ void	warnx(const char *, ...);
 #define HOST_NAME_MAX 255
 #endif
 
+#ifndef CLOCK_REALTIME
+#define CLOCK_REALTIME 0
+#endif
+#ifndef CLOCK_MONOTONIC
+#define CLOCK_MONOTONIC CLOCK_REALTIME
+#endif
+
 #ifndef HAVE_FLOCK
 #define LOCK_SH 0
 #define LOCK_EX 0
@@ -327,6 +347,11 @@ const char	*getprogname(void);
 #ifndef HAVE_SETPROCTITLE
 /* setproctitle.c */
 void		 setproctitle(const char *, ...);
+#endif
+
+#ifndef HAVE_CLOCK_GETTIME
+/* clock_gettime.c */
+int		 clock_gettime(int, struct timespec *);
 #endif
 
 #ifndef HAVE_B64_NTOP
