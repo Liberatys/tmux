@@ -43,6 +43,7 @@ static void	server_client_check_modes(struct client *);
 static void	server_client_set_title(struct client *);
 static void	server_client_reset_state(struct client *);
 static int	server_client_assume_paste(struct session *);
+static void	server_client_update_latest(struct client *);
 
 static void	server_client_dispatch(struct imsg *, void *);
 static void	server_client_dispatch_command(struct client *, struct imsg *);
@@ -271,6 +272,40 @@ server_client_open(struct client *c, char **cause)
 	return (0);
 }
 
+/* Lost an attached client. */
+static void
+server_client_attached_lost(struct client *c)
+{
+	struct session	*s = c->session;
+	struct window	*w;
+	struct client	*loop;
+	struct client	*found;
+
+	log_debug("lost attached client %p", c);
+
+	/*
+	 * By this point the session in the client has been cleared so walk all
+	 * windows to find any with this client as the latest.
+	 */
+	RB_FOREACH(w, windows, &windows) {
+		if (w->latest != c)
+			continue;
+
+		found = NULL;
+		TAILQ_FOREACH(loop, &clients, entry) {
+			s = loop->session;
+			if (loop == c || s == NULL || s->curw->window != w)
+				continue;
+			if (found == NULL ||
+			    timercmp(&loop->activity_time, &found->activity_time,
+			    >))
+				found = loop;
+		}
+		if (found != NULL)
+			server_client_update_latest(found);
+	}
+}
+
 /* Lost a client. */
 void
 server_client_lost(struct client *c)
@@ -295,6 +330,11 @@ server_client_lost(struct client *c)
 
 	TAILQ_REMOVE(&clients, c, entry);
 	log_debug("lost client %p", c);
+
+	if (c->flags & CLIENT_ATTACHED) {
+		server_client_attached_lost(c);
+		notify_client("client-detached", c);
+	}
 
 	if (c->flags & CLIENT_CONTROL)
 		control_stop(c);
@@ -1305,7 +1345,11 @@ server_client_handle_key(struct client *c, struct key_event *event)
 	 * immediately rather than queued.
 	 */
 	if (~c->flags & CLIENT_READONLY) {
-		status_message_clear(c);
+		if (c->message_string != NULL) {
+			if (c->message_ignore_keys)
+				return (0);
+			status_message_clear(c);
+		}
 		if (c->overlay_key != NULL) {
 			switch (c->overlay_key(c, event)) {
 			case 0:
@@ -1766,9 +1810,6 @@ server_client_check_exit(struct client *c)
 		if (EVBUFFER_LENGTH(cf->buffer) != 0)
 			return;
 	}
-
-	if (c->flags & CLIENT_ATTACHED)
-		notify_client("client-detached", c);
 	c->flags |= CLIENT_EXITED;
 
 	switch (c->exit_type) {
